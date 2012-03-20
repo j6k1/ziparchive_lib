@@ -17,10 +17,9 @@ class ZipFile
 	private $filesize;
 	private $errmsgs;
 	
-	public function __construct($filepath)
+	public function __construct()
 	{
 		$this->errmsgs = null;
-		$this->filesize = filesize($filepath);
 	}
 	
 	public static function extract($filepath, $outputpath)
@@ -81,7 +80,8 @@ class ZipFile
 
 		$extractpath = self::convToUnixDirectorySeparator($extractpath);
 
-		$zipfile = new ZipFile($filepath);
+		$zipfile = new ZipFile();
+		$zipfile->filesize = $filesize;
 		
 		$headers = $zipfile->readHeaders($fp);
 		
@@ -146,11 +146,11 @@ class ZipFile
 				$data = fread($fp, $fileheader["compression_size"]);
 				$writesize = $fileheader["none_compression_size"];
 				
-				//if(($fileheader['compression'] & 0x1000) != 0x1000)
-				//{
-				//	$zipfile->addErrMessage("ファイル{$filename}の圧縮メソッドは本ライブラリで未サポートです。処理をスキップします。");
-				//	continue;
-				//}
+				if($fileheader['compression'] != 8)
+				{
+					$zipfile->addErrMessage("ファイル{$filename}の圧縮メソッドは本ライブラリで未サポートです。処理をスキップします。");
+					continue;
+				}
 				
 				$data = gzinflate($data);
 				
