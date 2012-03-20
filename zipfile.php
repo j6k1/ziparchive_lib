@@ -154,6 +154,11 @@ class ZipFile
 				
 				$data = gzinflate($data);
 				
+				if(crc32($data) != $fileheader["crc32"])
+				{
+					$zipfile->addErrMessage("ファイル{$filename}のcrcが一致しません。正常に解凍されない可能性があります。");
+				}
+				
 				if(strlen($data) != $writesize)
 				{
 					$zipfile->addErrMessage("ファイル{$filename}のヘッダ上の解凍後サイズと実際の解凍データのサイズが一致しません。正常に解凍されない可能性があります。");
@@ -197,6 +202,8 @@ class ZipFile
 					$zipfile->addErrMessage("ファイル{$filename}の解凍データ書き込み時にエラーが発生しました。正常に解凍されなかった可能性があります。");
 					continue;
 				}
+				
+				fclose($writefp);
 				
 				unset($data);
 				
