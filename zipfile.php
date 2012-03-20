@@ -564,7 +564,14 @@ class ZipFile
 	
 	private static function convDirectorySeparator($path)
 	{
-		return preg_replace('#/#', DIRECTORY_SEPARATOR, $path);
+		if(DIRECTORY_SEPARATOR == "/")
+		{
+			return preg_replace('#\x5c#', DIRECTORY_SEPARATOR, $path);
+		}
+		else
+		{
+			return preg_replace('#/#', DIRECTORY_SEPARATOR, $path);
+		}
 	}
 	
 	private function convToUnixTimeStamp($date, $time)
