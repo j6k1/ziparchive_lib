@@ -3,7 +3,7 @@
  * ZipFile
  *
  * @package ZipFile - zip archive
- * @version 0.0.2-alpha
+ * @version 0.0.3-alpha
  * @author jinpu <http://will-co21.net>
  * @lisence The LGPL License
  * @copyright Copyright 2012 jinpu. All rights reserved.
@@ -269,7 +269,7 @@ class ZipFile
 			else
 			{
 				$this->addErrMessage("ローカルファイルヘッダ一覧の読み込み中に不正なデータを見つけました。データが壊れている可能性があります。");
-				ddbreak;
+				break;
 			}
 		}
 		
