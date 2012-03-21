@@ -3,7 +3,7 @@
  * ZipFile
  *
  * @package ZipFile - zip archive
- * @version 0.0.1-alpha
+ * @version 0.0.2-alpha
  * @author jinpu <http://will-co21.net>
  * @lisence The LGPL License
  * @copyright Copyright 2012 jinpu. All rights reserved.
