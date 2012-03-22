@@ -32,7 +32,7 @@ class ZipFile
 	public static function extractFromLocalFile($filepath, $outputpath)
 	{
 		//windows上で実行している場合、パスをwindows形式に変換
-		//※unix上で実行した時はunix形式への変換などは行わない。
+		//※unix上で実行した時はwindows形式への変換などは行わない。
 		//これはunix上ではバックスラッシュをファイル名などに使えるため、
 		//パスの変換が正常に行えない可能性があるため。
 		if(DIRECTORY_SEPARATOR == '\\')
