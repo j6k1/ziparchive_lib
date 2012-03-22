@@ -3,7 +3,7 @@
  * ZipFile
  *
  * @package ZipFile - zip archive
- * @version 0.0.4-alpha
+ * @version 0.0.5-alpha
  * @author jinpu <http://will-co21.net>
  * @lisence The LGPL License
  * @copyright Copyright 2012 jinpu. All rights reserved.
@@ -31,9 +31,16 @@ class ZipFile
 	
 	public static function extractFromLocalFile($filepath, $outputpath)
 	{
-		$filepath = self::convDirectorySeparator($filepath);
-		$outputpath = self::convDirectorySeparator($outputpath);
-
+		//windows上で実行している場合、パスをwindows形式に変換
+		//※unix上で実行した時はunix形式への変換などは行わない。
+		//これはunix上ではバックスラッシュをファイル名などに使えるため、
+		//パスの変換が正常に行えない可能性があるため。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$filepath = self::convToWinDirectorySeparator($filepath);
+			$outputpath = self::convToWinDirectorySeparator($outputpath);
+		}
+		
 		if(!file_exists($filepath))
 		{
 			throw new ZipFile_Exception("ファイル{$filepath}が見つかりませんでした。");
@@ -76,8 +83,12 @@ class ZipFile
 			$extractpath = $outputpath;
 		}
 
-		$extractpath = self::convToUnixDirectorySeparator($extractpath);
-
+		//windows上で実行している場合、パスをwindowsからunix形式に変換する。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$extractpath = self::convToUnixDirectorySeparator($extractpath, true);
+		}
+		
 		$zipfile = new ZipFile();
 		$zipfile->filesize = $filesize;
 		
@@ -123,7 +134,15 @@ class ZipFile
 			else
 			{
 				$filename = $extractpath . "/" . $fileheader["filename"];
-				$filename = self::convDirectorySeparator($filename);
+				
+				//windows上で実行している場合、パスをwindows形式に変換
+				//※なお、解凍しようとしているファイル名やディレクトリ名に
+				//'\'が含まれる場合、正常に解凍されない。
+				if(DIRECTORY_SEPARATOR == '\\')
+				{
+					$filename = self::convToWinDirectorySeparator($filename);
+				}
+				
 				$dirname = self::getDirName($filename);
 				
 				if(!file_exists($dirname))
@@ -554,22 +573,38 @@ class ZipFile
 		return array("header" => $header, "data_entry" => ftell($fp));
 	}
 	
-	private static function convToUnixDirectorySeparator($path)
+	private static function splitWithWindowsDS($path)
 	{
-		return preg_replace('#' . preg_quote(DIRECTORY_SEPARATOR, '#') . '#',
-			'/', $path);
-	}
-	
-	private static function convDirectorySeparator($path)
-	{
-		if(DIRECTORY_SEPARATOR == "/")
+		// \x5c('\')を除く連続するShift-JIS文字の列を全て切り出す
+		if(preg_match_all(
+			'/(?:[\x00-\x5B\x5D-\x7F\xA1-\xDF]|(?:[\x81-\x9F\xE0-\xFC][\x40-\x7E\x80-\xFC]))+/',
+			$path, $match))
 		{
-			return preg_replace('#\x5c#', DIRECTORY_SEPARATOR, $path);
+			return $match[0];
 		}
 		else
 		{
-			return preg_replace('#/#', DIRECTORY_SEPARATOR, $path);
+			return array();
 		}
+	}
+	
+	private static function convToUnixDirectorySeparator($path, $sjismode = false)
+	{
+		if($sjismode)
+		{
+			$path = self::splitWithWindowsDS($path);
+			return implode("/", $path);
+		}
+		else
+		{
+			return preg_replace('#' . preg_quote(DIRECTORY_SEPARATOR, '#') . '#',
+				'/', $path);
+		}
+	}
+	
+	private static function convToWinDirectorySeparator($path, $sjismode = false)
+	{
+		return preg_replace('#/#', DIRECTORY_SEPARATOR, $path);
 	}
 	
 	private function convToUnixTimeStamp($date, $time)
@@ -587,7 +622,17 @@ class ZipFile
 	
 	private static function getBaseName($filepath)
 	{
-		$filepath = explode(DIRECTORY_SEPARATOR, $filepath);
+		//引数として渡すパスはスクリプトを実行しているファイルシステムの
+		//形式のみとする。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$filepath = self::splitWithWindowsDS($filepath);
+		}
+		else
+		{
+			$filepath = explode(DIRECTORY_SEPARATOR, $filepath);
+		}
+		
 		return $filepath[count($filepath) - 1];
 	}
 	
@@ -600,7 +645,17 @@ class ZipFile
 				strlen($filepath) - strlen(DIRECTORY_SEPARATOR));
 		}
 		
-		$filepath = explode(DIRECTORY_SEPARATOR, $filepath);
+		//引数として渡すパスはスクリプトを実行しているファイルシステムの
+		//形式のみとする。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$filepath = self::splitWithWindowsDS($filepath);
+		}
+		else
+		{
+			$filepath = explode(DIRECTORY_SEPARATOR, $filepath);
+		}
+		
 		array_pop($filepath);
 		
 		return implode(DIRECTORY_SEPARATOR, $filepath);
@@ -613,6 +668,7 @@ class ZipFile
 	
 	private static function mkDirRecursive($path)
 	{
+		//ディレクトリは必ず"/"で区切って渡すこと。
 		if($path == "")
 		{
 			return true;
@@ -623,9 +679,20 @@ class ZipFile
 			$path = substr($path, 0, strlen($path) - 1);
 		}
 		
-		if(file_exists(self::convDirectorySeparator($path)))
+		//スクリプトを実行しているOSがwindows系である場合、
+		//パスを一旦windows形式に変換してチェック。
+		if(DIRECTORY_SEPARATOR == '\\')
 		{
-			if(is_dir(self::convDirectorySeparator($path)))
+			$checkpath = self::convToWinDirectorySeparator($path);
+		}
+		else
+		{
+			$checkpath = $path;
+		}
+		
+		if(file_exists($checkpath))
+		{
+			if(is_dir($checkpath))
 			{
 				return true;
 			}
@@ -649,9 +716,11 @@ class ZipFile
 				return $ret;
 			}
 			
+			//ファイルシステムのディレクトリ区切り記号でパスを連結してmkdir
 			return @mkdir(implode(DIRECTORY_SEPARATOR, $pathlist));
 		}
 		
+		//ここでmkdirに渡されるパスにはディレクトリ区切り記号は含まれない。
 		return @mkdir($path);
 	}
 	
