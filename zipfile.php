@@ -3,7 +3,7 @@
  * ZipFile
  *
  * @package ZipFile - zip archive
- * @version 0.0.3-alpha
+ * @version 0.0.4-alpha
  * @author jinpu <http://will-co21.net>
  * @lisence The LGPL License
  * @copyright Copyright 2012 jinpu. All rights reserved.
@@ -24,11 +24,9 @@ class ZipFile
 	
 	public static function extract($filepath, $outputpath)
 	{
-		$zipfile = self::extractFromLocalFile($filepath, $outputpath);
+		$result = self::extractFromLocalFile($filepath, $outputpath);
 		
-		$zipfile->dispErrmessages();
-		
-		return;
+		return $result;
 	}
 	
 	public static function extractFromLocalFile($filepath, $outputpath)
@@ -215,7 +213,7 @@ class ZipFile
 		}
 		
 		
-		return $zipfile;
+		return (empty($zipfile->errmsgs)) ? true : new ZipFile_Error($zipfile->errmsgs);
 	}
 	
 	private function readHeaders(&$fp)
@@ -657,21 +655,6 @@ class ZipFile
 		return @mkdir($path);
 	}
 	
-	public function dispErrmessages()
-	{
-		if((!isset($this->errmsgs)) || (!is_array($this->errmsgs)))
-		{
-			return true;
-		}
-		
-		foreach($this->errmsgs as $message)
-		{
-			echo "{$message}\n";
-		}
-		
-		return true;
-	}
-	
 	private function addErrMessage($errmessage)
 	{
 		if(!isset($this->errmsgs))
@@ -687,5 +670,60 @@ class ZipFile
 class ZipFile_Exception extends Exception
 {
 
+}
+class ZipFile_Error
+{
+	private $errmsgs;
+	
+	public function __construct($errmsgs)
+	{
+		$this->errmsgs = $errmsgs;
+	}
+	
+	public static function IsError($instance)
+	{
+		return ($instance instanceof ZipFile_Error);
+	}
+
+	public function dispErrMessages()
+	{
+		if((!isset($this->errmsgs)) || (!is_array($this->errmsgs)))
+		{
+			return true;
+		}
+		
+		foreach($this->errmsgs as $message)
+		{
+			echo "{$message}\n";
+		}
+		
+		return true;
+	}
+	
+	public function getErrMessages()
+	{
+		return $this->errmsgs;
+	}
+
+	public function getErrMessagesHtml($class = null, $style = null)
+	{
+		if((!isset($this->errmsgs)) || (!is_array($this->errmsgs)))
+		{
+			return "";
+		}
+		
+		$result = "";
+		$attr = "";
+		
+		$attr .= (!empty($class)) ? " class={$class}" : "";
+		$attr .= (!empty($style)) ? " style={$style}" : "";		
+		
+		foreach($this->errmsgs as $message)
+		{
+			$result .= "<div{$attr}>{$message}</div>\n";
+		}
+		
+		return $result;
+	}
 }
 ?>
