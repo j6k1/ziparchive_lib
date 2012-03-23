@@ -186,18 +186,18 @@ class ZipFile
 				
 				if(file_exists($filename))
 				{
-					if(filemtime($filename) < $last_modified)
+					if(is_dir($filename))
+					{
+						$zipfile->addErrMessage("ファイル{$filename}と同名のディレクトリが既に存在します。ファイルは解凍されません。");
+						continue;
+					}
+					else if(filemtime($filename) < $last_modified)
 					{
 						$zipfile->addErrMessage("ファイル{$filename}は既に存在します。タイムスタンプが新しいので、上書きします。");
 					}
-					else if(!is_dir($filename))
+					else
 					{
 						$zipfile->addErrMessage("ファイル{$filename}は既に存在します。タイムスタンプが新しくないので、ファイルは解凍されません。");
-						continue;
-					}
-					else if(is_dir($filename))
-					{
-						$zipfile->addErrMessage("ファイル{$filename}と同名のディレクトリが既に存在します。ファイルは解凍されません。");
 						continue;
 					}
 				}
