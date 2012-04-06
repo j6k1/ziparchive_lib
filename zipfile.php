@@ -337,7 +337,7 @@ class ZipFile
 		return true;	
 	}
 
-	function download($filename = 'backup.zip')
+	public function download($filename = 'backup.zip')
 	{
 		if (preg_match("#.*\.zip$#", $filename) == 0)
 		{
