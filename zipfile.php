@@ -17,18 +17,386 @@ class ZipFile
 	private $filesize;
 	private $errmsgs;
 	
+	private $zipdata;
+	private $directory;
+	private $entries;
+	private $offset;
+
 	public function __construct()
 	{
 		$this->errmsgs = null;
+
+		$this->zipdata = "";
+		$this->directory = "";
+		$this->entries = 0;
+		$this->offset = 0;
 	}
 	
-	public static function extract($filepath, $outputpath)
+	public function add_dir($directory)
 	{
-		$result = self::extractFromLocalFile($filepath, $outputpath);
+		if(!is_array($directory))
+		{
+			$directory = array($directory);
+		}
 		
-		return $result;
+		foreach ($directory as $dir)
+		{
+			if (preg_match("#.*/$#", $dir) == 0)
+			{
+				$dir .= '/';
+			}
+
+			$this->_add_dir($dir);
+		}
+	}
+
+	private function _add_dir($dir)
+	{
+		$dir = str_replace("\\", "/", $dir);
+
+		$this->zipdata .=
+			"\x50\x4b\x03\x04\x0a\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+			.pack('V', 0) // crc32
+			.pack('V', 0) // compressed filesize
+			.pack('V', 0) // uncompressed filesize
+			.pack('v', strlen($dir)) // length of pathname
+			.pack('v', 0) // extra field length
+			.$dir
+			// below is "data descriptor" segment
+			.pack('V', 0) // crc32
+			.pack('V', 0) // compressed filesize
+			.pack('V', 0); // uncompressed filesize
+
+		$this->directory .=
+			"\x50\x4b\x01\x02\x00\x00\x0a\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+			.pack('V',0) // crc32
+			.pack('V',0) // compressed filesize
+			.pack('V',0) // uncompressed filesize
+			.pack('v', strlen($dir)) // length of pathname
+			.pack('v', 0) // extra field length
+			.pack('v', 0) // file comment length
+			.pack('v', 0) // disk number start
+			.pack('v', 0) // internal file attributes
+			.pack('V', 16) // external file attributes - 'directory' bit set
+			.pack('V', $this->offset) // relative offset of local header
+			.$dir;
+
+		$this->offset = strlen($this->zipdata);
+		$this->entries++;
 	}
 	
+	public function add_zip_data($filepath, $data = '')
+	{
+		if (is_array($filepath))
+		{
+			foreach ($filepath as $path => $data)
+			{
+				$this->_add_zip_data($path, $data);
+			}
+		}
+		else
+		{
+			$this->_add_zip_data($filepath, $data);
+		}
+	}
+	
+	private function _add_zip_data($filepath, $data)
+	{
+		//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$filepath = str_replace("\\", "/", $filepath);
+		}
+		
+		$uncompressed_size = $data['body'][0]['local']['none_compression_size'];
+		$crc32  = crc32($data['body'][0]['local']['crc32']);
+
+		$gzdata = $data['body'][0]['data'];
+		$compressed_size = $data['body'][0]['local']['compression_size'];
+
+		$this->zipdata .=
+			"\x50\x4b\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
+			.pack('V', $crc32)
+			.pack('V', $compressed_size)
+			.pack('V', $uncompressed_size)
+			.pack('v', strlen($filepath)) // length of filename
+			.pack('v', 0) // extra field length
+			.$filepath
+			.$gzdata; // "file data" segment
+
+		$this->directory .=
+			"\x50\x4b\x01\x02\x00\x00\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
+			.pack('V', $crc32)
+			.pack('V', $compressed_size)
+			.pack('V', $uncompressed_size)
+			.pack('v', strlen($filepath)) // length of filename
+			.pack('v', 0) // extra field length
+			.pack('v', 0) // file comment length
+			.pack('v', 0) // disk number start
+			.pack('v', 0) // internal file attributes
+			.pack('V', 32) // external file attributes - 'archive' bit set
+			.pack('V', $this->offset) // relative offset of local header
+			.$filepath;
+
+		$this->offset = strlen($this->zipdata);
+		$this->entries++;
+	}
+	
+	public function add_data($filepath, $data = '')
+	{
+		if (is_array($filepath))
+		{
+			foreach ($filepath as $path => $data)
+			{
+				$this->_add_data($path, $data);
+			}
+		}
+		else
+		{
+			$this->_add_data($filepath, $data);
+		}
+	}
+
+	private function _add_data($filepath, $data)
+	{
+		//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$filepath = str_replace("\\", "/", $filepath);
+		}
+		
+		$uncompressed_size = strlen($data);
+		$crc32  = crc32($data);
+
+		$gzdata = gzdeflate($data);
+		$compressed_size = strlen($gzdata);
+
+		$this->zipdata .=
+			"\x50\x4b\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
+			.pack('V', $crc32)
+			.pack('V', $compressed_size)
+			.pack('V', $uncompressed_size)
+			.pack('v', strlen($filepath)) // length of filename
+			.pack('v', 0) // extra field length
+			.$filepath
+			.$gzdata; // "file data" segment
+
+		$this->directory .=
+			"\x50\x4b\x01\x02\x00\x00\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
+			.pack('V', $crc32)
+			.pack('V', $compressed_size)
+			.pack('V', $uncompressed_size)
+			.pack('v', strlen($filepath)) // length of filename
+			.pack('v', 0) // extra field length
+			.pack('v', 0) // file comment length
+			.pack('v', 0) // disk number start
+			.pack('v', 0) // internal file attributes
+			.pack('V', 32) // external file attributes - 'archive' bit set
+			.pack('V', $this->offset) // relative offset of local header
+			.$filepath;
+
+		$this->offset = strlen($this->zipdata);
+		$this->entries++;
+	}
+	
+	public function read_file($path)
+	{
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$path = self::convToWinDirectorySeparator($path);
+		}
+		
+		if (!file_exists($path))
+		{
+			throw new ZipFile_Exception("{$path}が見つかりませんでした。");
+		}
+
+		if (($data = file_get_contents($path)) !== false)
+		{
+			//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
+			if(DIRECTORY_SEPARATOR == '\\')
+			{
+				$name = str_replace("\\", "/", $path);
+			}
+			else
+			{
+				$name = $path;
+			}
+			
+			$this->add_data($name, $data);
+			return true;
+		}
+		
+		return false;
+	}
+	
+	public function read_dir($path)
+	{
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$path = self::convToWinDirectorySeparator($path);
+		
+			return read_dir_win($path);
+		}
+		else
+		{
+			return read_dir_unix($path);
+		}
+	}
+
+	private function read_dir_win($path)
+	{	
+		if(preg_match('#.*\x5c$#', $path) == 0)
+		{
+			$path .= "\x5c";
+		}
+
+		if ($fp = @opendir($path))
+		{
+			while (($file = readdir($fp)) !== false)
+			{
+				if (@is_dir($path.$file) && ($file != '.') && ($file != '..')) 
+				{					
+					$this->read_dir_win($path.$file."\x5c");
+				}
+				elseif (($file != '.') && ($file != '..'))
+				{
+					if (($data = file_get_contents($path.$file)) !== false)
+					{						
+						$this->add_data(str_replace("\\", "/", $path).$file, $data);
+					}
+				}
+			}
+			return true;
+		}
+		
+		throw new ZipFile_Exception("ディレクトリ{$path}がオープンできませんでした。");
+	}
+
+	private function read_dir_unix($path)
+	{	
+		if(preg_match('#.*/$#', $path) == 0)
+		{
+			$path .= "/";
+		}
+		
+		if ($fp = @opendir($path))
+		{
+			while (($file = readdir($fp)) !== false)
+			{
+				if (@is_dir($path.$file) && ($file != '.') && ($file != '..')) 
+				{					
+					$this->read_dir($path.$file."/");
+				}
+				elseif (($file != '.') && ($file != '..'))
+				{
+					if (($data = file_get_contents($path.$file)) !== false)
+					{
+						//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
+						$this->add_data($path . $file, $data);
+					}
+				}
+			}
+			return true;
+		}
+		
+		return false;
+	}
+
+	public function get_zip()
+	{
+		// Is there any data to return?
+		if ($this->entries == 0)
+		{
+			throw new ZipFile_Exception("zipファイルのエントリ数が0です。");
+		}
+
+		$zip_data = $this->zipdata;
+		$zip_data .= $this->directory."\x50\x4b\x05\x06\x00\x00\x00\x00";
+		$zip_data .= pack('v', $this->entries); // total # of entries "on this disk"
+		$zip_data .= pack('v', $this->entries); // total # of entries overall
+		$zip_data .= pack('V', strlen($this->directory)); // size of central dir
+		$zip_data .= pack('V', strlen($this->zipdata)); // offset to start of central dir
+		$zip_data .= "\x00\x00"; // .zip file comment length
+
+		return $zip_data;
+	}
+
+	public function archive($filepath)
+	{
+		if(($fp = @fopen($filepath, "wb")))
+		{
+			throw new ZipFile_Exception("{$filepath}を書き込みモードで開けませんでした。");
+		}
+
+		flock($fp, LOCK_EX);	
+		fwrite($fp, $this->get_zip());
+		flock($fp, LOCK_UN);
+		fclose($fp);
+
+		return true;	
+	}
+
+	function download($filename = 'backup.zip')
+	{
+		if (preg_match("#.*\.zip$#", $filename) == 0)
+		{
+			$filename .= '.zip';
+		}
+
+		$zip_content =& $this->get_zip();
+
+		$this->force_download($filename, $zip_content);
+	}
+
+	private function force_download($filename = '', $data = '')
+	{
+		if ($filename == '' || $data == '')
+		{
+			throw new ZipFile_Exception("ファイル名もしくはデータが空です。");
+		}
+
+		if(preg_match('#\.zip$#', $filename))
+		{
+			$mime = 'application/x-zip';
+		}
+		else
+		{
+			$mime = 'application/octet-stream';
+		}
+		
+		// Generate the server headers
+		if (strstr($_SERVER['HTTP_USER_AGENT'], "MSIE"))
+		{
+			header('Content-Type: "'.$mime.'"');
+			header('Content-Disposition: attachment; filename="'.$filename.'"');
+			header('Expires: 0');
+			header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+			header("Content-Transfer-Encoding: binary");
+			header('Pragma: public');
+			header("Content-Length: ".strlen($data));
+		}
+		else
+		{
+			header('Content-Type: "'.$mime.'"');
+			header('Content-Disposition: attachment; filename="'.$filename.'"');
+			header("Content-Transfer-Encoding: binary");
+			header('Expires: 0');
+			header('Pragma: no-cache');
+			header("Content-Length: ".strlen($data));
+		}
+	
+		exit($data);
+	}
+	
+	public function clear_data()
+	{
+		$this->zipdata = '';
+		$this->directory = '';
+		$this->entries = 0;
+		$this->offset = 0;
+	}
+
 	public static function extractToHeaderAndEntry($filepath)
 	{
 		//windows上で実行している場合、パスをwindows形式に変換
@@ -73,13 +441,20 @@ class ZipFile
 		{
 			$data["body"][$i] = array();
 			$data["body"][$i]["local"] = $header["header"];
-			$data["body"][$i]["data"] = fread($fp, $data["body"][$i]["compression_size"]);
+			$data["body"][$i]["data"] = fread($fp, $data["body"][$i]["local"]["compression_size"]);
 			$data["body"][$i]["directory"] = $headers["central"][$i]["header"];
 		}
 		
 		$data["tail"] = $headers["endcentral"]["header"];
 		
 		return $data;
+	}
+	
+	public static function extract($filepath, $outputpath)
+	{
+		$result = self::extractFromLocalFile($filepath, $outputpath);
+		
+		return $result;
 	}
 	
 	public static function extractFromLocalFile($filepath, $outputpath)
