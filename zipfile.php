@@ -29,10 +29,63 @@ class ZipFile
 		return $result;
 	}
 	
+	public static function extractToHeaderAndEntry($filepath)
+	{
+		//windows上で実行している場合、パスをwindows形式に変換
+		//※unix上で実行した時はunix形式への変換などは行わない。
+		//これはunix上ではバックスラッシュをファイル名などに使えるため、
+		//パスの変換が正常に行えない可能性があるため。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$filepath = self::convToWinDirectorySeparator($filepath);
+		}
+		
+		if(!file_exists($filepath))
+		{
+			throw new ZipFile_Exception("ファイル{$filepath}が見つかりませんでした。");
+		}
+		
+		$filesize = filesize($filepath);
+		
+		if($filesize < 98)
+		{
+			throw new ZipFile_Exception("zipファイルのフォーマットが不正です。");
+		}
+		
+		if(($fp = @fopen($filepath, "rb")) == false)
+		{
+			throw new ZipFile_Exception("zipファイルがオープンできませんでした。");
+		}
+				
+		//windows上で実行している場合、パスをwindowsからunix形式に変換する。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$extractpath = self::convToUnixDirectorySeparator($extractpath, true);
+		}
+		
+		$zipfile = new ZipFile();
+		$zipfile->filesize = $filesize;
+		
+		$headers = $zipfile->readHeaders($fp);
+		$data = array("body" => array(), "tail" => null);
+		
+		foreach($headers["local"] as $i => $header)
+		{
+			$data["body"][$i] = array();
+			$data["body"][$i]["local"] = $header["header"];
+			$data["body"][$i]["data"] = fread($fp, $data["body"][$i]["compression_size"]);
+			$data["body"][$i]["directory"] = $headers["central"][$i]["header"];
+		}
+		
+		$data["tail"] = $headers["endcentral"]["header"];
+		
+		return $data;
+	}
+	
 	public static function extractFromLocalFile($filepath, $outputpath)
 	{
 		//windows上で実行している場合、パスをwindows形式に変換
-		//※unix上で実行した時はwindows形式への変換などは行わない。
+		//※unix上で実行した時はunix形式への変換などは行わない。
 		//これはunix上ではバックスラッシュをファイル名などに使えるため、
 		//パスの変換が正常に行えない可能性があるため。
 		if(DIRECTORY_SEPARATOR == '\\')
@@ -569,6 +622,7 @@ class ZipFile
 		$header['size'] = $size;
 		$header['offset'] = $offset;
 		$header['comment_length'] = $comment_length;
+		$header['comment_field'] = $comment_field;
 		
 		return array("header" => $header, "data_entry" => ftell($fp));
 	}
