@@ -108,11 +108,11 @@ class ZipFile
 			$filepath = str_replace("\\", "/", $filepath);
 		}
 		
-		$uncompressed_size = $data['body'][0]['local']['none_compression_size'];
-		$crc32  = crc32($data['body'][0]['local']['crc32']);
+		$uncompressed_size = $data['body']['local']['none_compression_size'];
+		$crc32  = crc32($data['body']['local']['crc32']);
 
-		$gzdata = $data['body'][0]['data'];
-		$compressed_size = $data['body'][0]['local']['compression_size'];
+		$gzdata = $data['body']['data'];
+		$compressed_size = $data['body']['local']['compression_size'];
 
 		$this->zipdata .=
 			"\x50\x4b\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
