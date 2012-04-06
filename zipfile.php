@@ -324,7 +324,7 @@ class ZipFile
 
 	public function archive($filepath)
 	{
-		if(($fp = @fopen($filepath, "wb")))
+		if(($fp = @fopen($filepath, "wb")) == false)
 		{
 			throw new ZipFile_Exception("{$filepath}を書き込みモードで開けませんでした。");
 		}
