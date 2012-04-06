@@ -441,7 +441,7 @@ class ZipFile
 		{
 			$data["body"][$i] = array();
 			$data["body"][$i]["local"] = $header["header"];
-			$data["body"][$i]["data"] = fread($fp, $header["header"]["compression_size"]);
+			$data["body"][$i]["data"] = fread($fp,$data["body"][$i]["local"]["compression_size"]);
 			$data["body"][$i]["directory"] = $headers["central"][$i]["header"];
 		}
 		
