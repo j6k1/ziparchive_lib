@@ -109,7 +109,7 @@ class ZipFile
 		}
 		
 		$uncompressed_size = $data['body']['local']['none_compression_size'];
-		$crc32  = crc32($data['body']['local']['crc32']);
+		$crc32  = $data['body']['local']['crc32'];
 
 		$gzdata = $data['body']['data'];
 		$compressed_size = $data['body']['local']['compression_size'];
@@ -441,6 +441,7 @@ class ZipFile
 		{
 			$data["body"][$i] = array();
 			$data["body"][$i]["local"] = $header["header"];
+			fseek($fp, $header["data_entry"]);
 			$data["body"][$i]["data"] = fread($fp,$data["body"][$i]["local"]["compression_size"]);
 			$data["body"][$i]["directory"] = $headers["central"][$i]["header"];
 		}
