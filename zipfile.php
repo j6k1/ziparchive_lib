@@ -52,8 +52,12 @@ class ZipFile
 
 	private function _add_dir($dir)
 	{
-		$dir = str_replace("\\", "/", $dir);
-
+		//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$dir = str_replace("\\", "/", $dir);
+		}
+		
 		$this->zipdata .=
 			"\x50\x4b\x03\x04\x0a\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 			.pack('V', 0) // crc32
