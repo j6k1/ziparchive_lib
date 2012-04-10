@@ -55,7 +55,7 @@ class ZipFile
 		//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
 		if(DIRECTORY_SEPARATOR == '\\')
 		{
-			$dir = str_replace("\\", "/", $dir);
+			$dir = self::convToUnixDirectorySeparator($dir, true);
 		}
 		
 		$this->zipdata .=
@@ -109,7 +109,7 @@ class ZipFile
 		//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
 		if(DIRECTORY_SEPARATOR == '\\')
 		{
-			$filepath = str_replace("\\", "/", $filepath);
+			$filepath = self::convToUnixDirectorySeparator($filepath, true);
 		}
 		
 		$uncompressed_size = $data['body']['local']['none_compression_size'];
@@ -166,7 +166,7 @@ class ZipFile
 		//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
 		if(DIRECTORY_SEPARATOR == '\\')
 		{
-			$filepath = str_replace("\\", "/", $filepath);
+			$filepath = self::convToUnixDirectorySeparator($filepath, true);
 		}
 		
 		$uncompressed_size = strlen($data);
