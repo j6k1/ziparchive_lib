@@ -220,7 +220,7 @@ class ZipFile
 			//unix上で使用する場合、ディレクトリセパレータは必ず/を使うこと。
 			if(DIRECTORY_SEPARATOR == '\\')
 			{
-				$name = str_replace("\\", "/", $path);
+				$name = self::convToUnixDirectorySeparator($path, true);
 			}
 			else
 			{
@@ -266,8 +266,8 @@ class ZipFile
 				elseif (($file != '.') && ($file != '..'))
 				{
 					if (($data = file_get_contents($path.$file)) !== false)
-					{						
-						$this->add_data(str_replace("\\", "/", $path).$file, $data);
+					{
+						$this->add_data(self::convToUnixDirectorySeparator($path, true) . $file, $data);
 					}
 				}
 			}
@@ -1026,8 +1026,15 @@ class ZipFile
 	{
 		if($sjismode)
 		{
+			$tail = "";
+			
+			if(substr($path, -1) == "\\")
+			{
+				$tail = "/";
+			}
+			
 			$path = self::splitWithWindowsDS($path);
-			return implode("/", $path);
+			return implode("/", $path) . $tail;
 		}
 		else
 		{
