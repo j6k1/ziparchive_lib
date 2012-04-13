@@ -1225,8 +1225,8 @@ class ZipFile_Error
 		$result = "";
 		$attr = "";
 		
-		$attr .= (!empty($class)) ? " class={$class}" : "";
-		$attr .= (!empty($style)) ? " style={$style}" : "";		
+		$attr .= (!empty($class)) ? " class=\"{$class}\"" : "";
+		$attr .= (!empty($style)) ? " style=\"{$style}\"" : "";		
 		
 		foreach($this->errmsgs as $message)
 		{
