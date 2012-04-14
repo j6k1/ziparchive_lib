@@ -429,12 +429,6 @@ class ZipFile
 			throw new ZipFile_Exception("zipファイルがオープンできませんでした。");
 		}
 				
-		//windows上で実行している場合、パスをwindowsからunix形式に変換する。
-		if(DIRECTORY_SEPARATOR == '\\')
-		{
-			$extractpath = self::convToUnixDirectorySeparator($extractpath, true);
-		}
-		
 		$zipfile = new ZipFile();
 		$zipfile->filesize = $filesize;
 		
@@ -446,7 +440,15 @@ class ZipFile
 			$data["body"][$i] = array();
 			$data["body"][$i]["local"] = $header["header"];
 			fseek($fp, $header["data_entry"]);
-			$data["body"][$i]["data"] = fread($fp,$data["body"][$i]["local"]["compression_size"]);
+			if($data["body"][$i]["local"]["compression_size"] > 0)
+			{
+				$data["body"][$i]["data"] = fread($fp,$data["body"][$i]["local"]["compression_size"]);
+			}
+			else
+			{
+				$data["body"][$i]["data"] = "";
+			}
+			
 			$data["body"][$i]["directory"] = $headers["central"][$i]["header"];
 		}
 		
@@ -1036,7 +1038,7 @@ class ZipFile
 		}
 	}
 	
-	private static function convToUnixDirectorySeparator($path, $sjismode = false)
+	public static function convToUnixDirectorySeparator($path, $sjismode = false)
 	{
 		if($sjismode)
 		{
@@ -1057,12 +1059,12 @@ class ZipFile
 		}
 	}
 	
-	private static function convToWinDirectorySeparator($path, $sjismode = false)
+	public static function convToWinDirectorySeparator($path, $sjismode = false)
 	{
 		return preg_replace('#/#', DIRECTORY_SEPARATOR, $path);
 	}
 	
-	private static function convToUnixTimeStamp($date, $time)
+	public static function convToUnixTimeStamp($date, $time)
 	{
 		$hour = ($time & 0xF800) >> 11;
 		$minute = ($time & 0x07E0) >> 5;
@@ -1075,7 +1077,7 @@ class ZipFile
 		return mktime($hour, $minute, $second, $month, $day, $year);
 	}
 	
-	private static function getBaseName($filepath)
+	public static function getBaseName($filepath)
 	{
 		//引数として渡すパスはスクリプトを実行しているファイルシステムの
 		//形式のみとする。
@@ -1091,7 +1093,7 @@ class ZipFile
 		return $filepath[count($filepath) - 1];
 	}
 	
-	private static function getDirName($filepath)
+	public static function getDirName($filepath)
 	{
 		if(substr($filepath, 
 			-(strlen(DIRECTORY_SEPARATOR))) == DIRECTORY_SEPARATOR)
@@ -1116,12 +1118,12 @@ class ZipFile
 		return implode(DIRECTORY_SEPARATOR, $filepath);
 	}
 	
-	private static function truncateExtension($filename)
+	public static function truncateExtension($filename)
 	{	
 		return preg_replace('/\.[^\.]*$/', '', $filename);
 	}
 	
-	private static function mkDirRecursive($path)
+	public static function mkDirRecursive($path)
 	{
 		//ディレクトリは必ず"/"で区切って渡すこと。
 		if($path == "")
@@ -1319,14 +1321,14 @@ class ZipFile_On_Memory {
 		//'\'が含まれる場合、正常に解凍されない。
 		if(DIRECTORY_SEPARATOR == '\\')
 		{
-			$filename = self::convToWinDirectorySeparator($filename);
+			$filename = ZipFile::convToWinDirectorySeparator($filename);
 		}
 		
-		$dirname = self::getDirName($filename);
+		$dirname = ZipFile::getDirName($filename);
 		
 		if(!file_exists($dirname))
 		{
-			if(self::mkDirRecursive($dirname) == false)
+			if(ZipFile::mkDirRecursive($dirname) == false)
 			{
 				$this->addErrMessage("ディレクトリ{$dirname}の作成中にエラーが発生しました。再帰的なディレクトリの作成に失敗しています。");
 			}
@@ -1346,7 +1348,7 @@ class ZipFile_On_Memory {
 			$this->addErrMessage("ファイル{$filename}のヘッダ上の解凍後サイズと実際の解凍データのサイズが一致しません。正常に解凍されない可能性があります。");
 		}
 
-		$last_modified = self::convToUnixTimeStamp(
+		$last_modified = ZipFile::convToUnixTimeStamp(
 			$rec["lastupdate_date"], $rec["lastupdate_time"]);	
 		
 		if(file_exists($filename))
@@ -1354,7 +1356,7 @@ class ZipFile_On_Memory {
 			if(is_dir($filename))
 			{
 				$this->addErrMessage("ファイル{$filename}と同名のディレクトリが既に存在します。ファイルは解凍されません。");
-				continue;
+				return;
 			}
 			else if(filemtime($filename) < $last_modified)
 			{
@@ -1363,26 +1365,26 @@ class ZipFile_On_Memory {
 			else
 			{
 				$this->addErrMessage("ファイル{$filename}は既に存在します。タイムスタンプが新しくないので、ファイルは解凍されません。");
-				continue;
+				return;
 			}
 		}
 		
 		if(file_exists($filename) && (!is_writeable($filename)))
 		{
 			$this->addErrMessage("ファイル{$filename}を上書きできません。");
-			continue;
+			return;
 		}
 		
 		if(($writefp = @fopen($filename, 'wb')) == false) 
 		{
 			$this->addErrMessage("ファイル{$filename}を書き込みモードで開けませんでした。");
-			continue;
+			return;
 		}
 		
 		if((@fwrite($writefp, $data, $writesize)) === false)
 		{
 			$this->addErrMessage("ファイル{$filename}の解凍データ書き込み時にエラーが発生しました。正常に解凍されなかった可能性があります。");
-			continue;
+			return;
 		}
 		
 		fclose($writefp);
@@ -1403,7 +1405,7 @@ class ZipFile_On_Memory {
 		//パスの変換が正常に行えない可能性があるため。
 		if(DIRECTORY_SEPARATOR == '\\')
 		{
-			$outputpath = self::convToWinDirectorySeparator($outputpath);
+			$outputpath = ZipFile::convToWinDirectorySeparator($outputpath);
 		}
 		
 		if($outputpath == ("." . DIRECTORY_SEPARATOR))
@@ -1434,7 +1436,7 @@ class ZipFile_On_Memory {
 		//windows上で実行している場合、パスをwindowsからunix形式に変換する。
 		if(DIRECTORY_SEPARATOR == '\\')
 		{
-			$extractpath = self::convToUnixDirectorySeparator($extractpath, true);
+			$extractpath = ZipFile::convToUnixDirectorySeparator($extractpath, true);
 		}
 		
 		if(isset($filepath))
