@@ -457,7 +457,7 @@ class ZipFile
 	
 	public static function preExtract($filepath)
 	{
-		return preExtractFromLocalFile($filepath);
+		return self::preExtractFromLocalFile($filepath);
 	}
 
 	public static function preExtractFromLocalFile($filepath)
