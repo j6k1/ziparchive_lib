@@ -1263,8 +1263,9 @@ class ZipFile_On_Memory {
 	private $footer;
 	private $errmsgs;
 	
-	public function __construct($data)
+	public function __construct($filepath)
 	{
+		$data = ZipFile::preExtract($filepath);
 		$this->errmsgs = null;
 		$this->data = array();
 		
