@@ -455,6 +455,20 @@ class ZipFile
 		return $data;
 	}
 	
+	public static function preExtract($filepath)
+	{
+		return preExtractFromLocalFile($filepath);
+	}
+
+	public static function preExtractFromLocalFile($filepath)
+	{
+		$data = self::extractToHeaderAndEntry($filepath);
+		
+		$result = new ZipFile_On_Memory($data);
+		
+		return $result;
+	}
+	
 	public static function extract($filepath, $outputpath)
 	{
 		$result = self::extractFromLocalFile($filepath, $outputpath);
@@ -569,7 +583,7 @@ class ZipFile
 				$filename = $extractpath . "/" . $fileheader["filename"];
 				
 				//windows上で実行している場合、パスをwindows形式に変換
-				//※なお、解凍しようとしているファイル名やディレクトリ名に
+				//※なお、解凍しようとしているファイル名やディレクトリ名の第2バイトに
 				//'\'が含まれる場合、正常に解凍されない。
 				if(DIRECTORY_SEPARATOR == '\\')
 				{
@@ -614,7 +628,7 @@ class ZipFile
 					$zipfile->addErrMessage("ファイル{$filename}のヘッダ上の解凍後サイズと実際の解凍データのサイズが一致しません。正常に解凍されない可能性があります。");
 				}
 		
-				$last_modified = $zipfile->convToUnixTimeStamp(
+				$last_modified = self::convToUnixTimeStamp(
 					$fileheader["lastupdate_date"], $fileheader["lastupdate_time"]);	
 				
 				if(file_exists($filename))
@@ -1048,7 +1062,7 @@ class ZipFile
 		return preg_replace('#/#', DIRECTORY_SEPARATOR, $path);
 	}
 	
-	private function convToUnixTimeStamp($date, $time)
+	private static function convToUnixTimeStamp($date, $time)
 	{
 		$hour = ($time & 0xF800) >> 11;
 		$minute = ($time & 0x07E0) >> 5;
@@ -1234,6 +1248,230 @@ class ZipFile_Error
 		}
 		
 		return $result;
+	}
+}
+class ZipFile_On_Memory {
+	private $data;
+	private $footer;
+	private $errmsgs;
+	
+	public function __construct($data)
+	{
+		$this->errmsgs = null;
+		$this->data = array();
+		
+		$body = $data["body"];
+		
+		foreach($body as $rec)
+		{
+			if( (($rec["directory"]["external"] & 0x00000010) == 0x10) ||
+				(substr($rec["local"]["filename"], -1) == "/") )
+			{
+				continue;
+			}
+			
+			$filename = $rec["local"]["filename"];
+			
+			if($rec["local"]["compression"] != 0x08)
+			{
+				$this->addErrMessage("ファイル{$filename}の圧縮メソッドは本ライブラリで未サポートです。処理をスキップします。");
+				continue;
+			}
+			
+			$this->data[$filename] = array(
+				"body" => $rec["data"], 
+				"crc" => $rec["local"]["crc32"],
+				"size" => $rec["local"]["none_compression_size"],
+				"lastupdate_date" => $rec["local"]["lastupdate_date"],
+				"lastupdate_time" => $rec["local"]["lastupdate_time"]);
+		}
+		
+		$this->footer = $data["tail"];
+	}
+	
+	public function extractToMemory($filepath)
+	{
+		$data = $this->data[$filepath];
+		
+		$result = gzinflate($data["body"]);
+		
+		if(crc32($result) != $data["crc"])
+		{
+			$this->addErrMessage("ファイル{$filepath}のcrcが一致しません。正常に解凍されない可能性があります。");
+		}
+		
+		if(strlen($result) != $data["size"])
+		{
+			$this->addErrMessage("ファイル{$filepath}のヘッダ上の解凍後サイズと実際の解凍データのサイズが一致しません。正常に解凍されない可能性があります。");
+		}
+		
+		return $result;
+	}
+	
+	private function extractSpecificFileToFile($extractpath, $filename)
+	{
+		$rec = $this->data[$filename];
+		
+		$filename = $extractpath . "/" . $filename;
+		
+		//windows上で実行している場合、パスをwindows形式に変換
+		//※なお、解凍しようとしているファイル名やディレクトリ名の第2バイトに
+		//'\'が含まれる場合、正常に解凍されない。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$filename = self::convToWinDirectorySeparator($filename);
+		}
+		
+		$dirname = self::getDirName($filename);
+		
+		if(!file_exists($dirname))
+		{
+			if(self::mkDirRecursive($dirname) == false)
+			{
+				$this->addErrMessage("ディレクトリ{$dirname}の作成中にエラーが発生しました。再帰的なディレクトリの作成に失敗しています。");
+			}
+		}
+		
+		$writesize = $rec["size"];
+		
+		$data = gzinflate($rec["body"]);
+		
+		if(crc32($data) != $rec["crc"])
+		{
+			$this->addErrMessage("ファイル{$filename}のcrcが一致しません。正常に解凍されない可能性があります。");
+		}
+		
+		if(strlen($data) != $writesize)
+		{
+			$this->addErrMessage("ファイル{$filename}のヘッダ上の解凍後サイズと実際の解凍データのサイズが一致しません。正常に解凍されない可能性があります。");
+		}
+
+		$last_modified = self::convToUnixTimeStamp(
+			$rec["lastupdate_date"], $rec["lastupdate_time"]);	
+		
+		if(file_exists($filename))
+		{
+			if(is_dir($filename))
+			{
+				$this->addErrMessage("ファイル{$filename}と同名のディレクトリが既に存在します。ファイルは解凍されません。");
+				continue;
+			}
+			else if(filemtime($filename) < $last_modified)
+			{
+				$this->addErrMessage("ファイル{$filename}は既に存在します。タイムスタンプが新しいので、上書きします。");
+			}
+			else
+			{
+				$this->addErrMessage("ファイル{$filename}は既に存在します。タイムスタンプが新しくないので、ファイルは解凍されません。");
+				continue;
+			}
+		}
+		
+		if(file_exists($filename) && (!is_writeable($filename)))
+		{
+			$this->addErrMessage("ファイル{$filename}を上書きできません。");
+			continue;
+		}
+		
+		if(($writefp = @fopen($filename, 'wb')) == false) 
+		{
+			$this->addErrMessage("ファイル{$filename}を書き込みモードで開けませんでした。");
+			continue;
+		}
+		
+		if((@fwrite($writefp, $data, $writesize)) === false)
+		{
+			$this->addErrMessage("ファイル{$filename}の解凍データ書き込み時にエラーが発生しました。正常に解凍されなかった可能性があります。");
+			continue;
+		}
+		
+		fclose($writefp);
+		
+		unset($data);
+		
+		if((@touch($filename, $last_modified)) == false)
+		{
+			$this->addErrMessage("ファイル{$filename}の最終更新時刻設定でエラーが発生しました。解凍そのものは成功しています。");
+		}
+	}
+	
+	public function extractToFile($outputpath, $filepath = null)
+	{
+		//windows上で実行している場合、パスをwindows形式に変換
+		//※unix上で実行した時はunix形式への変換などは行わない。
+		//これはunix上ではバックスラッシュをファイル名などに使えるため、
+		//パスの変換が正常に行えない可能性があるため。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$outputpath = self::convToWinDirectorySeparator($outputpath);
+		}
+		
+		if($outputpath == ("." . DIRECTORY_SEPARATOR))
+		{
+			$outputpath = "";
+		}
+		else if(substr($outputpath, 0, 
+			1 + strlen(DIRECTORY_SEPARATOR)) == ("." . DIRECTORY_SEPARATOR))
+		{
+			$outputpath = substr($outputpath, 1 + strlen(DIRECTORY_SEPARATOR));
+		}
+		
+		if($outputpath == "")
+		{
+			$extractpath = "";
+		}
+		else if( (substr($outputpath, 
+			     -(strlen(DIRECTORY_SEPARATOR))) == DIRECTORY_SEPARATOR) )
+		{
+			$extractpath = substr($outputpath, 0, 
+				strlen($outputpath) - strlen(DIRECTORY_SEPARATOR));
+		}
+		else
+		{
+			$extractpath = $outputpath;
+		}
+
+		//windows上で実行している場合、パスをwindowsからunix形式に変換する。
+		if(DIRECTORY_SEPARATOR == '\\')
+		{
+			$extractpath = self::convToUnixDirectorySeparator($extractpath, true);
+		}
+		
+		if(isset($filepath))
+		{
+			$this->$this->extractSpecificFileToFile($extractpath, $filepath);
+		}
+		else
+		{
+			foreach($this->data as $filename => $rec)
+			{
+				$this->extractSpecificFileToFile($extractpath, $filename);
+			}
+		}
+		
+		return (empty($this->errmsgs)) ? true : new ZipFile_Error($this->errmsgs);
+	}
+	
+	public function isError()
+	{
+		return ($this->errmsgs !== null);
+	}
+	
+	public function getError()
+	{
+		return (empty($this->errmsgs)) ? null : new ZipFile_Error($this->errmsgs);
+	}
+	
+	private function addErrMessage($errmessage)
+	{
+		if(!isset($this->errmsgs))
+		{
+			$this->errmsgs = array();
+		}
+		
+		$this->errmsgs[] = $errmessage;
+		
+		return true;
 	}
 }
 ?>
