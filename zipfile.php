@@ -596,6 +596,12 @@ class ZipFile
 				
 				if(!file_exists($dirname))
 				{
+					if(DIRECTORY_SEPARATOR == '\\')
+					{
+						$dirname = self::convToUnixDirectorySeparator(
+							$dirname, true);
+					}
+	
 					if(self::mkDirRecursive($dirname) == false)
 					{
 						$zipfile->addErrMessage("ディレクトリ{$dirname}の作成中にエラーが発生しました。再帰的なディレクトリの作成に失敗しています。");
@@ -1328,6 +1334,12 @@ class ZipFile_On_Memory {
 		
 		if(!file_exists($dirname))
 		{
+			if(DIRECTORY_SEPARATOR == '\\')
+			{
+				$dirname = ZipFile::convToUnixDirectorySeparator(
+					$dirname, true);
+			}
+
 			if(ZipFile::mkDirRecursive($dirname) == false)
 			{
 				$this->addErrMessage("ディレクトリ{$dirname}の作成中にエラーが発生しました。再帰的なディレクトリの作成に失敗しています。");
