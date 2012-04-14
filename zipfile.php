@@ -464,9 +464,7 @@ class ZipFile
 
 	public static function preExtractFromLocalFile($filepath)
 	{
-		$data = self::extractToHeaderAndEntry($filepath);
-		
-		$result = new ZipFile_On_Memory($data);
+		$result = new ZipFile_On_Memory($filepath);
 		
 		return $result;
 	}
@@ -1265,7 +1263,7 @@ class ZipFile_On_Memory {
 	
 	public function __construct($filepath)
 	{
-		$data = ZipFile::preExtract($filepath);
+		$data = ZipFile::extractToHeaderAndEntry($filepath);
 		$this->errmsgs = null;
 		$this->data = array();
 		
